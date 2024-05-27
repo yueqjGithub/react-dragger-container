@@ -1,0 +1,14 @@
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  position: absolute;
+  left: var(--left);
+  top: var(--top);
+  right: var(--right);
+  bottom: var(--bottom);
+  &.dragging {
+    transition: none;
+  }
+  transition: all ease-in .3s;
+}
