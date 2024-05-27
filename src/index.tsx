@@ -1,4 +1,5 @@
 import { FC, PropsWithChildren, useEffect, useRef, useState } from "react";
+import styles from './index.module.scss'
 
 type PositionType = {
   /** left-px */
@@ -29,6 +30,8 @@ const DraggerContainer: FC<Props> = ({ children, position, onChange }) => {
 
   const [selfPosition, setSelfPosition] = useState<PositionType>()
 
+  const virtualPcSignal = useRef<boolean>(false)
+
   const isMobile = /Android|webOS|iPhone|iPod|BlackBerry/i.test(navigator.userAgent);
   const touchstart = isMobile ? 'touchstart' : 'mousedown';
   const touchmove = isMobile ? 'touchmove' : 'mousemove';
@@ -46,25 +49,32 @@ const DraggerContainer: FC<Props> = ({ children, position, onChange }) => {
     }
   }, [ref])
 
-  const onTouchStart = (e: TouchEvent, _allWidth: number, _allHeight: number) => {
+  const onTouchStart = (e: TouchEvent | MouseEvent, _allWidth: number, _allHeight: number) => {
+    if (!isMobile) {
+      e.preventDefault()
+    }
     setDragging(true)
     const _startPosition = {
       x: Math.floor(ref.current!.offsetLeft) || 0,
       y: Math.floor(ref.current!.offsetTop) || 0
     }
     const _startInfo = {
-      x: Math.floor(e.touches[0].clientX),
-      y: Math.floor(e.touches[0].clientY)
+      x: isMobile ? Math.floor((e as TouchEvent).touches[0].clientX) : Math.floor((e as MouseEvent).clientX),
+      y: isMobile ? Math.floor((e as TouchEvent).touches[0].clientY) : Math.floor((e as MouseEvent).clientY),
     }
     const abortController = new AbortController()
     signalRef.current = abortController
-    ref.current!.addEventListener(touchmove, (e) => onTouchMove(e as TouchEvent, _startInfo, _startPosition, _allWidth, _allHeight), { signal: abortController.signal })
-    ref.current!.addEventListener(touchend, (e) => onTouchEnd(e as TouchEvent, _startInfo, _startPosition, _allWidth, _allHeight), { once: true })
+    virtualPcSignal.current = true
+    ref.current!.addEventListener(touchmove, (e) => onTouchMove(e, _startInfo, _startPosition, _allWidth, _allHeight), { signal: abortController.signal })
+    ref.current!.addEventListener(touchend, (e) => onTouchEnd(e, _startInfo, _startPosition, _allWidth, _allHeight), { once: true })
   }
 
-  const onTouchMove = (e: TouchEvent, _startInfo: { x: number, y: number }, _startPosition: { x: number, y: number }, _allWidth: number, _allHeight: number) => {
-    const curX = Math.floor(e.touches[0].clientX)
-    const curY = Math.floor(e.touches[0].clientY)
+  const onTouchMove = (e: TouchEvent | MouseEvent, _startInfo: { x: number, y: number }, _startPosition: { x: number, y: number }, _allWidth: number, _allHeight: number) => {
+    if (!virtualPcSignal.current) {
+      return
+    }
+    const curX = isMobile ? Math.floor((e as TouchEvent).touches[0].clientX) : Math.floor((e as MouseEvent).clientX)
+    const curY = isMobile ? Math.floor((e as TouchEvent).touches[0].clientY) : Math.floor((e as MouseEvent).clientY)
     const moveX = curX - _startInfo.x
     const moveY = curY - _startInfo.y
 
@@ -76,11 +86,15 @@ const DraggerContainer: FC<Props> = ({ children, position, onChange }) => {
     })
   }
 
-  const onTouchEnd = (e: TouchEvent, _startInfo: { x: number, y: number }, _startPosition: { x: number, y: number }, _allWidth: number, _allHeight: number) => {
+  const onTouchEnd = (e: TouchEvent | MouseEvent, _startInfo: { x: number, y: number }, _startPosition: { x: number, y: number }, _allWidth: number, _allHeight: number) => {
     signalRef.current?.abort()
+    if (!isMobile) {
+      virtualPcSignal.current = false
+      e.stopPropagation()
+    }
     setDragging(false)
-    const curX = Math.floor(e.changedTouches[0].clientX)
-    const curY = Math.floor(e.changedTouches[0].clientY)
+    const curX = isMobile ? Math.floor((e as TouchEvent).changedTouches[0].clientX) : Math.floor((e as MouseEvent).clientX)
+    const curY = isMobile ? Math.floor((e as TouchEvent).changedTouches[0].clientY) : Math.floor((e as MouseEvent).clientY)
     const moveX = curX - _startInfo.x
     const moveY = curY - _startInfo.y
 
@@ -104,22 +118,13 @@ const DraggerContainer: FC<Props> = ({ children, position, onChange }) => {
   }, [position])
 
   return (
-    <div
+    <div className={`${styles.container} ${dragging ? styles.dragging : ''}`}
       ref={ref}
       style={{
         '--left': `${selfPosition?.left !== undefined ? `${selfPosition.left}px` : 'unset'}`,
         '--top': `${selfPosition?.top !== undefined ? `${selfPosition.top}%` : 'unset'}`,
         '--right': `${selfPosition?.right !== undefined ? `${selfPosition.right}px` : 'unset'}`,
         '--bottom': `${selfPosition?.bottom !== undefined ? `${selfPosition.bottom}%` : 'unset'}`,
-        'display': 'flex',
-        'justify-content': 'center',
-        'align-items': 'center',
-        'position': 'absolute',
-        'left': 'var(--left)',
-        'top': 'var(--top)',
-        'right': 'var(--right)',
-        'bottom': 'var(--bottom)',
-        'transition': `${dragging ? 'none' : 'all 0.3s ease-in-out'}`,
       } as any}
     >
       {children}
